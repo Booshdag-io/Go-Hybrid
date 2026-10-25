@@ -666,6 +666,12 @@ impl<'a> Lexer<'a> {
                     self.bump();
                     return self.tok(start, Tok::RawStr(s));
                 }
+                Some('\r') => {
+                    // Go language specification: carriage return characters ('\r') inside
+                    // raw string literals are discarded from the raw string value (issue #1634).
+                    // Consume the '\r' byte so spans and token positions remain exact.
+                    self.bump();
+                }
                 Some(c) => {
                     s.push(c);
                     self.bump();
@@ -1035,6 +1041,35 @@ mod tests {
             .into_iter()
             .map(|t| t.tok)
             .collect()
+    }
+
+    #[test]
+    fn raw_string_discards_carriage_returns() {
+        // Go language specification: carriage return characters ('\r') inside
+        // raw string literals are discarded from the raw string value (issue #1634).
+        let t = toks("let x = `a\rb`");
+        assert_eq!(
+            t,
+            vec![
+                Tok::Kw("let"),
+                Tok::Ident("x".into()),
+                Tok::Punct("="),
+                Tok::RawStr("ab".into()),
+                Tok::Eof,
+            ]
+        );
+
+        let t_crlf = toks("let y = `line1\r\nline2`");
+        assert_eq!(
+            t_crlf,
+            vec![
+                Tok::Kw("let"),
+                Tok::Ident("y".into()),
+                Tok::Punct("="),
+                Tok::RawStr("line1\nline2".into()),
+                Tok::Eof,
+            ]
+        );
     }
 
     #[test]
